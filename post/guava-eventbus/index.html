@@ -1,0 +1,602 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Guava EventBus | Gridea</title>
+<link rel="shortcut icon" href="https://DaxiaoYang.github.io/favicon.ico?v=1631370528683">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://DaxiaoYang.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Guava EventBus | Gridea - Atom Feed" href="https://DaxiaoYang.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="观察者模式
+概念：
+
+在对象之间定义一个一对多的依赖关系，
+当一个对象（被观察者）的状态变化时，所有依赖的对象（观察者）都会自动收到通知
+
+使用场景：
+
+当一个事件发生时，会影响到很多其他模块的状态（考虑到模块可能会不断增多）
+
+观察者模式..." />
+    <meta name="keywords" content="" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="https://cdn.bootcss.com/highlight.js/9.12.0/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://DaxiaoYang.github.io">
+  <img class="avatar" src="https://DaxiaoYang.github.io/images/avatar.png?v=1631370528683" alt="">
+  </a>
+  <h1 class="site-title">
+    Gridea
+  </h1>
+  <p class="site-description">
+    温故而知新
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Guava EventBus
+            </h2>
+            <div class="post-info">
+              <span>
+                2021-09-11
+              </span>
+              <span>
+                10 min read
+              </span>
+              
+            </div>
+            
+            <div class="post-content-wrapper">
+              <div class="post-content">
+                <h2 id="观察者模式">观察者模式</h2>
+<p>概念：</p>
+<blockquote>
+<p>在对象之间定义一个一对多的依赖关系，</p>
+<p>当一个对象（被观察者）的状态变化时，所有依赖的对象（观察者）都会自动收到通知</p>
+</blockquote>
+<p>使用场景：</p>
+<blockquote>
+<p>当一个事件发生时，会影响到很多其他模块的状态（考虑到模块可能会不断增多）</p>
+</blockquote>
+<p>观察者模式和生产-消费模型的区别：</p>
+<ul>
+<li>一对多和多对多</li>
+<li>消息被多个对象消费和消息被一个对象消费</li>
+</ul>
+<p><strong>实现方式</strong></p>
+<ul>
+<li>传统方式实现观察者模式：
+<ol>
+<li>定义观察者接口</li>
+<li>在被观察者中定义观察者接口的集合</li>
+<li>当事件发生时 被观察者遍历集合 进行通知</li>
+</ol>
+</li>
+</ul>
+<p><strong>缺点</strong>：需要在被观察者中注册观察者</p>
+<p>优化：</p>
+<ul>
+<li>通过一个中间映射表实现</li>
+</ul>
+<h2 id="guava-eventbus">Guava EventBus</h2>
+<p>实现进程内部的发布订阅模型 避免显示注册观察者 进一步解耦</p>
+<h3 id="流程图">流程图</h3>
+<pre><code class="language-mermaid">graph TD
+0(观察者所在的类将自身的观察者 即方法注册到EventBus中) --&gt; 1[EventBus构造事件到观察者的映射结构]
+1 --&gt; 2[事件发生时通知EventBus EventBus通过映射结构找到所有对应的观察者 并执行]
+</code></pre>
+<h3 id="类图"><strong>类图</strong></h3>
+<pre><code class="language-mermaid">classDiagram
+	EventBus --* SubscriberRegistry
+	EventBus --* Dispatcher
+	EventBus --* Executor
+	AsyncEventBus --|&gt; EventBus
+	LegacyAsyncDispatcher --|&gt; Dispatcher
+	ImmediateDispatcher --|&gt; Dispatcher
+	PerThreadQueuedDispatcher --|&gt; Dispatcher
+	DirectExecutor ..|&gt; Executor
+	ThreadPoolExecutor ..|&gt; Executor
+	EventBus --&gt; Subsriber
+	Dispatcher --&gt; Subsriber
+	SynchronizedSubscriber --|&gt; Subsriber
+	class EventBus {
+		-Executor executor
+		-SubscriberRegistry subscribers
+		-Dispatcher dispatcher
+		-SubscriberExceptionHandler exceptionHandler
+		+register(object) void
+		+post(object) void
+	}
+	
+	class SubscriberRegistry {
+		~register(object) void
+	}
+	
+	class Dispatcher {
+		~dispatch(event, subsribers) void
+	}
+	
+	class LegacyAsyncDispatcher {
+	
+	}
+	
+	class ImmediateDispatcher
+	
+	class PerThreadQueuedDispatcher
+	
+	class Executor {
+		+execute(command) void
+	}
+	
+	class DirectExecutor
+	
+	class ThreadPoolExecutor
+	
+	class AsyncEventBus
+	
+	class Subsriber {
+		-EventBus bus
+		~Object target
+		-Method method
+		-Executor executor
+		~dispatchEvent(event) void
+	}
+	
+	class SynchronizedSubscriber
+</code></pre>
+<p><strong>EventBus中成员变量各自的作用</strong></p>
+<ul>
+<li><code>SubscriberRegistry</code> : 核心组件 维护了事件到事件的所有订阅者方法的Map</li>
+<li><code>Executor</code> ：用于定义如何调用订阅者方法</li>
+<li><code>Dispatcher</code>： 控制事件分发到订阅者方法的次序</li>
+<li><code>SubscriberExceptionHandler</code> : 执行订阅者方法出错时执行的逻辑</li>
+</ul>
+<h3 id="eventbus对象创建"><strong>EventBus对象创建</strong></h3>
+<p>两种类型：</p>
+<ul>
+<li>
+<p>同步</p>
+<pre><code class="language-java">EventBus eventBus = new EventBus();
+// 等价于
+EventBus eventBus = new EventBus(
+        // 默认标识符标识符 
+  			&quot;default&quot;,
+  			// 在发布事件的线程中调用观察者方法
+        MoreExecutors.directExecutor(),
+  			// 每个发布事件的线程都有自己独立的队列 依次从队列中取出事件和观察者 执行通知逻辑
+        Dispatcher.perThreadDispatchQueue(),
+  			// 默认的异常处理：记录日志
+        LoggingHandler.INSTANCE);
+</code></pre>
+</li>
+<li>
+<p>异步</p>
+<pre><code class="language-java">EventBus eventBus = new AsyncEventBus(new ThreadPoolExecutor());
+// 等价于
+EventBus eventBus = new EventBus(
+  &quot;default&quot;, 
+  // 在线程池中的线程中调用观察者方法
+  new ThreadPoolExecutor(), 
+  // 所有发布事件的线程共享一个队列
+  Dispatcher.legacyAsync(), 
+  LoggingHandler.INSTANCE);)
+</code></pre>
+</li>
+</ul>
+<h3 id="注册观察者"><strong>注册观察者</strong></h3>
+<p><em>订阅者是一个方法而非一个类</em></p>
+<ol>
+<li>
+<p>定义一个<code>public</code>方法，单一入参，参数类型为想要接收的事件类型</p>
+</li>
+<li>
+<p>方法上加上<code>@Subscribe</code>注解 触发方法时默认是同步的</p>
+<p>（如果允许多个线程访问 如：无状态方法 还可以加上<code>@AllowConcurrentEvents</code>注解）</p>
+</li>
+<li>
+<p>将方法所在的类 注册到EventBus中 <code>register(Object)</code></p>
+</li>
+</ol>
+<pre><code class="language-java">public class Observer extends BaseObserver {
+
+  	// 定义事件的观察者 事件类型即为所定义参数的类型
+    @Subscribe
+    @AllowConcurrentEvents
+    public void onEvent(Integer event) {
+        System.out.println(&quot;handle integer event:&quot; + event);
+    }
+    
+}
+// 将方法所在的类 注册到EventBus
+eventBus.register(new Observer());
+
+// 实际调用注册表 
+void register(Object listener) {
+  	// 获取映射：事件 -&gt; 事件对应的所有订阅者（Method对象） MultiMap中一个Key可以对应多个Value
+    Multimap&lt;Class&lt;?&gt;, Subscriber&gt; listenerMethods = findAllSubscribers(listener);
+		// 将映射将入到全局的Map中
+    for (Entry&lt;Class&lt;?&gt;, Collection&lt;Subscriber&gt;&gt; entry : listenerMethods.asMap().entrySet()) {
+      Class&lt;?&gt; eventType = entry.getKey();
+      Collection&lt;Subscriber&gt; eventMethodsInListener = entry.getValue();
+      CopyOnWriteArraySet&lt;Subscriber&gt; eventSubscribers = subscribers.get(eventType);
+      if (eventSubscribers == null) {
+        CopyOnWriteArraySet&lt;Subscriber&gt; newSet = new CopyOnWriteArraySet&lt;&gt;();
+        eventSubscribers =
+            MoreObjects.firstNonNull(subscribers.putIfAbsent(eventType, newSet), newSet);
+      }
+      eventSubscribers.addAll(eventMethodsInListener);
+    }
+  }
+
+// 构建映射：事件 -&gt; 事件对应的所有订阅者（Method对象）
+private Multimap&lt;Class&lt;?&gt;, Subscriber&gt; findAllSubscribers(Object listener) {
+    Multimap&lt;Class&lt;?&gt;, Subscriber&gt; methodsInListener = HashMultimap.create();
+    Class&lt;?&gt; clazz = listener.getClass();
+  	// 注解扫描
+    for (Method method : getAnnotatedMethods(clazz)) {
+      Class&lt;?&gt;[] parameterTypes = method.getParameterTypes();
+      Class&lt;?&gt; eventType = parameterTypes[0];
+      // 想想为什么需要把EventBus对象和订阅者所在的类对象也封装进去？
+      // Subsriber负责调用方法 默认情况下可以保证在EventBus中调用该方法的线程安全
+      methodsInListener.put(eventType, Subscriber.create(bus, listener, method));
+    }
+    return methodsInListener;
+  }
+
+// getAnnotatedMethods(clazz)实际执行逻辑
+private static ImmutableList&lt;Method&gt; getAnnotatedMethodsNotCached(Class&lt;?&gt; clazz) {
+  	// 获取该类所有的父类与接口类及其本身的Class对象
+    Set&lt;? extends Class&lt;?&gt;&gt; supertypes = TypeToken.of(clazz).getTypes().rawTypes();
+  	// 用于过滤重复的观察者：方法签名相同的
+    Map&lt;MethodIdentifier, Method&gt; identifiers = Maps.newHashMap();
+    for (Class&lt;?&gt; supertype : supertypes) {
+      for (Method method : supertype.getDeclaredMethods()) {
+        // 判断该方法是否存在@Subsribe注解
+        if (method.isAnnotationPresent(Subscribe.class) &amp;&amp; !method.isSynthetic()) {
+          Class&lt;?&gt;[] parameterTypes = method.getParameterTypes();
+          // ...省略参数校验：1.校验参数个数是否为一个 2.是否为对象类型
+          MethodIdentifier ident = new MethodIdentifier(method);
+          if (!identifiers.containsKey(ident)) {
+            identifiers.put(ident, method);
+          }
+        }
+      }
+    }
+  	// 返回所有观察者
+    return ImmutableList.copyOf(identifiers.values());
+  }
+
+// 很重要的一个封装类：Subsriber的创建
+static Subscriber create(EventBus bus, Object listener, Method method) {
+  // 该方法上没有@AllowConcurrentEvents注解则默认创建同步的Subsriber 区别后面发布事件 调用方法时会说  
+  return isDeclaredThreadSafe(method)
+        ? new Subscriber(bus, listener, method)
+        : new SynchronizedSubscriber(bus, listener, method);
+  }
+
+private static boolean isDeclaredThreadSafe(Method method) {
+    return method.getAnnotation(AllowConcurrentEvents.class) != null;
+  }
+</code></pre>
+<h3 id="发布事件-通知订阅者"><strong>发布事件 通知订阅者</strong></h3>
+<ol>
+<li>将事件对象放入EventBus的<code>post</code>方法中，EventBus会将该事件通知到所有注册的观察者中</li>
+<li>事件必须是一个对象 会通知所有该对象及其能接受该对象的父类/接口</li>
+<li>如果没有观察者注册接收这个事件，则会将这个事件包装成一个DeadEvent 通知DeadEvent的观察者</li>
+</ol>
+<pre><code class="language-java">// 发布者发布事件
+for (int i = 0; i &lt; 3; i++) {
+  eventBus.post(i);
+}
+
+public void post(Object event) {
+  	// 获取该类及其所有父类的Class对象对应的订阅者
+    Iterator&lt;Subscriber&gt; eventSubscribers = subscribers.getSubscribers(event);
+  	// 如果存在订阅者 则通过分发器通知对应的订阅者事件发生
+    if (eventSubscribers.hasNext()) {
+      // 发布事件到所有的订阅者上
+      dispatcher.dispatch(event, eventSubscribers);
+    } else if (!(event instanceof DeadEvent)) {
+      // 找不到对应的订阅者且自身不是DeadEvent类型（程序编写错误） 
+      // 封装成DeadEvent对象再次发布 所以可以注册一个观察DeadEvent的订阅者 用于定位问题
+      post(new DeadEvent(this, event));
+    }
+}
+
+
+Iterator&lt;Subscriber&gt; getSubscribers(Object event) {
+  	// 获取该类及其所有父类的Class对象
+    ImmutableSet&lt;Class&lt;?&gt;&gt; eventTypes = flattenHierarchy(event.getClass());
+    List&lt;Iterator&lt;Subscriber&gt;&gt; subscriberIterators =
+        Lists.newArrayListWithCapacity(eventTypes.size());
+    for (Class&lt;?&gt; eventType : eventTypes) {
+      CopyOnWriteArraySet&lt;Subscriber&gt; eventSubscribers = subscribers.get(eventType);
+      if (eventSubscribers != null) {
+        // eager no-copy snapshot
+        subscriberIterators.add(eventSubscribers.iterator());
+      }
+    }
+    return Iterators.concat(subscriberIterators.iterator());
+  }
+
+
+
+// 同步EventBus中默认使用的分发方式
+private static final class PerThreadQueuedDispatcher extends Dispatcher {
+
+    /** 线程私有的队列：存储事件对象和对应的订阅者的封装类对象 */
+    private final ThreadLocal&lt;Queue&lt;Event&gt;&gt; queue；
+
+    /** 线程私有的标志 */
+    private final ThreadLocal&lt;Boolean&gt; dispatching；
+
+    @Override
+    void dispatch(Object event, Iterator&lt;Subscriber&gt; subscribers) {
+      // 获取发布者线程私有的队列
+      Queue&lt;Event&gt; queueForThread = queue.get();
+      queueForThread.offer(new Event(event, subscribers));
+      if (!dispatching.get()) {
+        dispatching.set(true);
+        try {
+          Event nextEvent;
+          while ((nextEvent = queueForThread.poll()) != null) {
+            while (nextEvent.subscribers.hasNext()) {
+              // 调用Subsriber的dispatchEvent
+              nextEvent.subscribers.next().dispatchEvent(nextEvent.event);
+            }
+          }
+        } finally {
+          dispatching.remove();
+          queue.remove();
+        }
+      }
+    }
+  }
+
+// 异步EventBus中默认使用的分发方式
+private static final class LegacyAsyncDispatcher extends Dispatcher {
+
+    /** Global event queue. */
+    private final ConcurrentLinkedQueue&lt;EventWithSubscriber&gt; queue =
+        Queues.newConcurrentLinkedQueue();
+
+    @Override
+    void dispatch(Object event, Iterator&lt;Subscriber&gt; subscribers) {
+      // 加入全局队列
+      while (subscribers.hasNext()) {
+        queue.add(new EventWithSubscriber(event, subscribers.next()));
+      }
+			// 将全局队列中的method都触发完
+      EventWithSubscriber e;
+      while ((e = queue.poll()) != null) {
+        e.subscriber.dispatchEvent(e.event);
+      }
+    }
+ }
+
+class Subscriber {
+
+  /** The event bus this subscriber belongs to. */
+  @Weak private EventBus bus;
+
+  /** The object with the subscriber method. */
+  @VisibleForTesting final Object target;
+
+  /** Subscriber method. */
+  private final Method method;
+
+  /** Executor to use for dispatching events to this subscriber. */
+  private final Executor executor;
+  
+  final void dispatchEvent(final Object event) {
+    // 模板方法 将执行订阅者方法的逻辑封装成一个Runnable匿名子类对象 让Executor执行
+    executor.execute(
+      new Runnable() {
+        @Override
+        public void run() {
+          try {
+       			// 具体执行
+            invokeSubscriberMethod(event);
+          } catch (InvocationTargetException e) {
+            // 执行中出现异常 则封装异常上下文 交给SubscriberExceptionHandler处理
+            bus.handleSubscriberException(e.getCause(), context(event));
+          }
+        }
+      });
+  }
+  
+  
+  void invokeSubscriberMethod(Object event) throws InvocationTargetException {
+    try {
+      // 反射调用
+      method.invoke(target, checkNotNull(event));
+    } catch (IllegalArgumentException e) {
+      throw new Error(&quot;Method rejected target/argument: &quot; + event, e);
+    } catch (IllegalAccessException e) {
+      throw new Error(&quot;Method became inaccessible: &quot; + event, e);
+    } catch (InvocationTargetException e) {
+      if (e.getCause() instanceof Error) {
+        throw (Error) e.getCause();
+      }
+      throw e;
+    }
+  }
+  
+  static final class SynchronizedSubscriber extends Subscriber {
+		
+    // 子类会给该方法加锁 保证一次只会有一个线程执行method.invoke
+    @Override
+    void invokeSubscriberMethod(Object event) throws InvocationTargetException {
+      synchronized (this) {
+        super.invokeSubscriberMethod(event);
+      }
+    }
+  }
+} 
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li>
+<ul>
+<li><a href="#%E8%A7%82%E5%AF%9F%E8%80%85%E6%A8%A1%E5%BC%8F">观察者模式</a></li>
+<li><a href="#guava-eventbus">Guava EventBus</a>
+<ul>
+<li><a href="#%E6%B5%81%E7%A8%8B%E5%9B%BE">流程图</a></li>
+<li><a href="#%E7%B1%BB%E5%9B%BE"><strong>类图</strong></a></li>
+<li><a href="#eventbus%E5%AF%B9%E8%B1%A1%E5%88%9B%E5%BB%BA"><strong>EventBus对象创建</strong></a></li>
+<li><a href="#%E6%B3%A8%E5%86%8C%E8%A7%82%E5%AF%9F%E8%80%85"><strong>注册观察者</strong></a></li>
+<li><a href="#%E5%8F%91%E5%B8%83%E4%BA%8B%E4%BB%B6-%E9%80%9A%E7%9F%A5%E8%AE%A2%E9%98%85%E8%80%85"><strong>发布事件 通知订阅者</strong></a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://DaxiaoYang.github.io/post/tomcat-xian-cheng-chi/">
+              <h3 class="post-title">
+                Tomcat线程池
+              </h3>
+            </a>
+          </div>
+        
+
+        
+          
+            <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css">
+<script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+
+<div id="gitalk-container"></div>
+
+<script>
+
+  var gitalk = new Gitalk({
+    clientID: 'e9c89da663720a974ea7',
+    clientSecret: '3a045f859f7d285b787aab5005a687ce02a95c35',
+    repo: 'DaxiaoYang.github.io',
+    owner: 'DaxiaoYang',
+    admin: ['DaxiaoYang'],
+    id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+    distractionFreeMode: false  // Facebook-like distraction free mode
+  })
+
+  gitalk.render('gitalk-container')
+
+</script>
+
+          
+
+          
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://DaxiaoYang.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>
