@@ -2,7 +2,7 @@
 <feed xmlns="http://www.w3.org/2005/Atom">
     <id>https://DaxiaoYang.github.io</id>
     <title>Gridea</title>
-    <updated>2021-09-12T14:19:45.930Z</updated>
+    <updated>2021-09-22T03:06:13.503Z</updated>
     <generator>https://github.com/jpmonette/feed</generator>
     <link rel="alternate" href="https://DaxiaoYang.github.io"/>
     <link rel="self" href="https://DaxiaoYang.github.io/atom.xml"/>
@@ -10,6 +10,324 @@
     <logo>https://DaxiaoYang.github.io/images/avatar.png</logo>
     <icon>https://DaxiaoYang.github.io/favicon.ico</icon>
     <rights>All rights reserved 2021, Gridea</rights>
+    <entry>
+        <title type="html"><![CDATA[ThreadLocal源码解析]]></title>
+        <id>https://DaxiaoYang.github.io/post/threadlocal-yuan-ma-jie-xi/</id>
+        <link href="https://DaxiaoYang.github.io/post/threadlocal-yuan-ma-jie-xi/">
+        </link>
+        <updated>2021-09-22T03:04:53.000Z</updated>
+        <content type="html"><![CDATA[<h2 id="线程安全">线程安全</h2>
+<blockquote>
+<p>线程安全定义：</p>
+<p>class is thread-safe when it continues to behave correctly when accessed</p>
+<p>from multiple threads</p>
+<p>Correctness means that a class <em>conforms to its specifification</em>.</p>
+</blockquote>
+<p><strong>实现线程安全的方法</strong></p>
+<ul>
+<li>
+<p>加锁：保证修改数据的操作的原子性</p>
+</li>
+<li>
+<p>CAS：也是保证修改数据的操作的原子性</p>
+</li>
+<li>
+<p>使用不可变对象：使得对象在创建之后就不可修改，不存在并发修改问题</p>
+</li>
+<li>
+<p>Copy-On-Write</p>
+</li>
+<li>
+<p>使用线程私有数据：线程操作的数据只有线程能访问，其他线程访问不到</p>
+<p>而ThreadLocal则是JDK提供的帮助我们存取线程私有数据的类</p>
+</li>
+</ul>
+<h2 id="threadlocal的用途">ThreadLocal的用途</h2>
+<ul>
+<li>
+<p>实现线程安全，避免数据被并发修改</p>
+</li>
+<li>
+<p>缓存</p>
+<p>如果某个线程一直存活（比如线程池中的核心线程），且需要频繁用到某个数据，则可以将数据存储到线程私有数据中(JVM内存模型中的栈)</p>
+</li>
+<li>
+<p>线程数据避免显式传参</p>
+</li>
+<li>
+<p>作为对象池：对象使用完之后清除信息 放回，再次使用时取出即可</p>
+</li>
+</ul>
+<p><strong>使用示例</strong></p>
+<pre><code class="language-java">import java.util.concurrent.atomic.AtomicLong;
+
+/**
+ * @ description:利用ThreadLocal生成线程的ID
+ * @ author: daxiao
+ * @ date: 2021/9/16
+ */
+public class ThreadId {
+
+  	// 生成进程内唯一的线程ID
+    private static final AtomicLong nextId = new AtomicLong(0);
+
+    // 使用静态工厂方法withInitial() 生成一个重写了initialValue方法的ThreadLocal的子类
+    private static final ThreadLocal&lt;Long&gt; threadId = ThreadLocal.withInitial(nextId::getAndIncrement);
+
+    // 每个调用该静态方法的线程都获取了唯一的ID 由CAS保证ID生成的原子性
+    public static long get() {
+        return threadId.get();
+    }
+}
+</code></pre>
+<h2 id="源码">源码</h2>
+<p><strong>使用流程</strong></p>
+<ol>
+<li>
+<p>继承<code>ThreadLocal</code>类， 在子类中重写 <code>initialValue()</code>方法</p>
+<p>为<code>get()</code>方法设置初始值，获取子类对象</p>
+</li>
+<li>
+<p>线程调用调用<code>threadLocal.get()</code>获取初始值</p>
+</li>
+<li>
+<p><code>threadLocal.set(newValue)</code> 设置新值</p>
+</li>
+<li>
+<p>使用完毕后 如果有必要则<code>threadLocal.remove()</code></p>
+<p>线程池中的线程私有数据如果不想被其他线程看到，用完之后需要remove掉，因为线程会被调用者复用</p>
+</li>
+</ol>
+<h3 id="初始化">初始化</h3>
+<pre><code class="language-java">// ThreadLocal对象只是作为一个token 一个map中的key使用 所以存储不同对象的ThreadLocal设置为静态成员变量即可
+private static ThreadLocal&lt;Integer&gt; cache = ThreadLocal.withInitial(() -&gt; 0);
+
+// withInitial是一个静态工厂方法 实际上返回的是一个重写了initialValue方法的子类
+static final class SuppliedThreadLocal&lt;T&gt; extends ThreadLocal&lt;T&gt; {
+
+  private final Supplier&lt;? extends T&gt; supplier;
+
+  SuppliedThreadLocal(Supplier&lt;? extends T&gt; supplier) {
+    this.supplier = Objects.requireNonNull(supplier);
+  }
+
+  @Override
+  protected T initialValue() {
+    return supplier.get();
+  }
+}
+
+</code></pre>
+<p><strong>ThreadLocalMap两个关键点</strong></p>
+<ul>
+<li>
+<p>解决哈希冲突的方式：线性探测</p>
+</li>
+<li>
+<p>使用弱引用作为map中entry的Key以实现垃圾回收</p>
+<p>stale状态：需要被回收的状态，如果<code>entry.get() == null</code> 即Entry中的key ThreadLocal类已经被垃圾回收，被WeakRefence指向的对象，如果只有WeakReference指向它，就会被回收，则清理entry中的value和entry自身，将引用置空，进行垃圾回收</p>
+</li>
+</ul>
+<h3 id="获取">获取</h3>
+<pre><code class="language-java">Integer integer = cache.get();
+
+/*
+	实际存储数据的是Thread对象中的ThreadLocal.ThreadLocalMap threadLocals
+	ThreadLocal类只是作为一个获取值的一个Key
+*/
+public T get() {
+  // 获取当前线程对象
+  Thread t = Thread.currentThread();
+  // 获取实际存储线程私有数据的map t.threadLocals;
+  ThreadLocalMap map = getMap(t);
+  if (map != null) {
+    // map中的key为当前的ThreadLocal对象 
+    ThreadLocalMap.Entry e = map.getEntry(this);
+    if (e != null) {
+      @SuppressWarnings(&quot;unchecked&quot;)
+      T result = (T)e.value;
+      return result;
+    }
+  }
+  return setInitialValue();
+}
+
+
+private T setInitialValue() {
+  // 获取初始化 未重写则为null
+  T value = initialValue();
+  Thread t = Thread.currentThread();
+  ThreadLocalMap map = getMap(t);
+  if (map != null)
+    map.set(this, value);
+  else
+    // 延迟初始化 线程中的map
+    createMap(t, value);
+  return value;
+}
+
+
+void createMap(Thread t, T firstValue) {
+  t.threadLocals = new ThreadLocalMap(this, firstValue);
+}
+
+ThreadLocalMap(ThreadLocal&lt;?&gt; firstKey, Object firstValue) {
+  // 创建初始容量为16的Entry数组 容量 保证为2的倍数 用于将取余操作转化为速度较快的bit与操作
+  // 如capacity=16 16 - 1 = 15 二进制为 0b1111 任何其他数跟0b1111相与 所得结果就位于[0-15]这个区间中
+  table = new Entry[INITIAL_CAPACITY];
+  // 哈希值的生成由一个全局的AtomicInteger 间隔一定的距离给出
+  int i = firstKey.threadLocalHashCode &amp; (INITIAL_CAPACITY - 1);
+  table[i] = new Entry(firstKey, firstValue);
+  size = 1;
+  // loadfactor是 2/3 如果是16 则在size为10时进行rehash 
+  setThreshold(INITIAL_CAPACITY);
+}
+
+
+// 实际执行的在哈希表中的get方法
+private Entry getEntry(ThreadLocal&lt;?&gt; key) {
+  int i = key.threadLocalHashCode &amp; (table.length - 1);
+  // 根据哈希值 获取对应slot中的entry 如果key相同 即threadLocal对象相同 则直接返回
+  // 直接比较引用值的方法最快 在HashMap类中也是最先比较引用值再调用object.equals方法
+  Entry e = table[i];
+  if (e != null &amp;&amp; e.get() == key)
+    return e;
+  else
+    // 否则进行线性探测
+    return getEntryAfterMiss(key, i, e);
+}
+
+
+private Entry getEntryAfterMiss(ThreadLocal&lt;?&gt; key, int i, Entry e) {
+  Entry[] tab = table;
+  int len = tab.length;
+  // 遇到为null的entry或者是相应的对象
+  while (e != null) {
+    ThreadLocal&lt;?&gt; k = e.get();
+    if (k == key)
+      return e;
+    // 遇到entry不为null 但是key为null的情况 key为弱引用 当只有这里的弱引用指向threadLocal对象时 在垃圾回收时 不管内存是否够不够用 对象都会被清理掉 
+    if (k == null)
+      expungeStaleEntry(i);
+    else
+      //  nextIndex中就是进行环形的线性探测 将数组在逻辑上视为一个环 ((i + 1 &lt; len) ? i + 1 : 0)
+      i = nextIndex(i, len);
+    e = tab[i];
+  }
+  return null;
+}
+
+
+/*
+	清除当前entry 并且一直nextIndex直到遇到null 
+	对所遇到的entry 如果是stale状态: key为null的 直接清空引用信息
+	不为stale状态的进行rehash
+*/
+private int expungeStaleEntry(int staleSlot) {
+  Entry[] tab = table;
+  int len = tab.length;
+  // expunge entry at staleSlot
+  tab[staleSlot].value = null;
+  tab[staleSlot] = null;
+  size--;
+  // Rehash until we encounter null
+  Entry e;
+  int i;
+  for (i = nextIndex(staleSlot, len);
+       (e = tab[i]) != null;
+       i = nextIndex(i, len)) {
+    ThreadLocal&lt;?&gt; k = e.get();
+    if (k == null) {
+      e.value = null;
+      tab[i] = null;
+      size--;
+    } else {
+      int h = k.threadLocalHashCode &amp; (len - 1);
+      if (h != i) {
+        tab[i] = null;
+        while (tab[h] != null)
+          h = nextIndex(h, len);
+        tab[h] = e;
+      }
+    }
+  }
+  return i;
+}
+</code></pre>
+<h3 id="设置">设置</h3>
+<pre><code class="language-java">// set和remove方法同样也是操作ThreadLocalMap
+public void set(T value) {
+  Thread t = Thread.currentThread();
+  ThreadLocalMap map = getMap(t);
+  if (map != null)
+    map.set(this, value);
+  else
+    createMap(t, value);
+}
+
+private void set(ThreadLocal&lt;?&gt; key, Object value) {
+  Entry[] tab = table;
+  int len = tab.length;
+  int i = key.threadLocalHashCode &amp; (len-1);
+
+  for (Entry e = tab[i];
+       e != null;
+       e = tab[i = nextIndex(i, len)]) {
+    ThreadLocal&lt;?&gt; k = e.get();
+
+    if (k == key) {
+      e.value = value;
+      return;
+    }
+		// 清理stale状态的entry
+    if (k == null) {
+      replaceStaleEntry(key, value, i);
+      return;
+    }
+  }
+  tab[i] = new Entry(key, value);
+  int sz = ++size;
+  // 进行log(len)或者log(size)次探测未发现需要清理的slot 且达到需要rehash时 进行rehash
+  if (!cleanSomeSlots(i, sz) &amp;&amp; sz &gt;= threshold)
+    rehash();
+}
+
+private void rehash() {
+  // 先清理stale数据 如果有就可以减少size 
+  expungeStaleEntries();
+  // 如果size还是大于指定值 就继续执行扩容
+  if (size &gt;= threshold - threshold / 4)
+    resize();
+}
+</code></pre>
+<h3 id="清除">清除</h3>
+<pre><code class="language-java">// remove之后 当前线程再调用get方法 就会再次触发initialValue的逻辑
+public void remove() {
+  ThreadLocalMap m = getMap(Thread.currentThread());
+  if (m != null)
+    m.remove(this);
+}
+
+private void remove(ThreadLocal&lt;?&gt; key) {
+  Entry[] tab = table;
+  int len = tab.length;
+  int i = key.threadLocalHashCode &amp; (len-1);
+  for (Entry e = tab[i];
+       e != null;
+       e = tab[i = nextIndex(i, len)]) {
+    // 找到相应的entry
+    if (e.get() == key) {
+      // key = null 设置为stale状态
+      e.clear();
+      // 清理该entry 以及向后遍历 清理stale entry和rehash entry 直到遇到null
+      expungeStaleEntry(i);
+      return;
+    }
+  }
+}
+</code></pre>
+]]></content>
+    </entry>
     <entry>
         <title type="html"><![CDATA[Guava EventBus]]></title>
         <id>https://DaxiaoYang.github.io/post/guava-eventbus/</id>
